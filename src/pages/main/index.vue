@@ -33,6 +33,21 @@ const dropZone = ref<HTMLDivElement | null>(null);
 const compressedBase64 = ref("");
 const error = ref<string | null>(null);
 const isCompressing = ref(false);
+const compressedImageSize = ref({ width: 0, height: 0 });
+
+// 获取图片尺寸的函数
+const getImageSize = (base64: string): Promise<{ width: number; height: number }> => {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      resolve({
+        width: img.width,
+        height: img.height
+      });
+    };
+    img.src = base64;
+  });
+};
 
 // 默认压缩参数
 const defaultOptions: CompressionOptions = {
@@ -128,6 +143,8 @@ const handleCompress = async () => {
       fileInfo.value.filename,
       compressionOptions.value
     );
+    // 获取压缩后图片的尺寸
+    compressedImageSize.value = await getImageSize(compressedBase64.value);
     // 保存最后使用的压缩参数
     lastCompressedOptions.value = { ...compressionOptions.value };
   } catch (err) {
@@ -300,6 +317,10 @@ onMounted(() => {
               <div class="info-item">
                 <span class="label">压缩率:</span>
                 <span class="value">{{ compressionRatio }}%</span>
+              </div>
+              <div class="info-item">
+                <span class="label">图片尺寸:</span>
+                <span class="value">{{ compressedImageSize.width }} × {{ compressedImageSize.height }}</span>
               </div>
             </div>
           </div>
