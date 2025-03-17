@@ -8,7 +8,19 @@ export interface PreviewProps {
    */
   filename: string;
   /**
-   * 图片的大小
+   * 图片的大小（字节）
    */
   size: number;
+  /**
+   * 图片的宽度（像素）
+   */
+  width?: number;
+  /**
+   * 图片的高度（像素）
+   */
+  height?: number;
+  /**
+   * 图片的类型（MIME）
+   */
+  type?: string;
 }

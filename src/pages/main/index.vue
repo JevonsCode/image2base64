@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from "vue";
+import { ref, onMounted, computed, watch } from "vue";
 import type { Ref } from "vue";
 
 import Preview from "../../component/preview/index.vue";
@@ -16,6 +16,16 @@ interface FileInfo {
   base64: string;
   filename: string;
   size: number;
+  type: string;
+}
+
+interface CompressionOptions {
+  maxSizeMB: number;
+  maxWidthOrHeight: number;
+  useWebWorker: boolean;
+  quality: number;
+  maintainAspectRatio: boolean;
+  preserveExif: boolean;
 }
 
 const fileInfo: Ref<FileInfo | null> = ref(null);
@@ -23,6 +33,40 @@ const dropZone = ref<HTMLDivElement | null>(null);
 const compressedBase64 = ref("");
 const error = ref<string | null>(null);
 const isCompressing = ref(false);
+
+// 默认压缩参数
+const defaultOptions: CompressionOptions = {
+  maxSizeMB: 1,
+  maxWidthOrHeight: 1920,
+  useWebWorker: true,
+  quality: 0.8,
+  maintainAspectRatio: true,
+  preserveExif: false,
+};
+
+// 压缩参数
+const compressionOptions = ref<CompressionOptions>({ ...defaultOptions });
+const lastCompressedOptions = ref<CompressionOptions | null>(null);
+
+// 检查参数是否已更改
+const hasOptionsChanged = computed(() => {
+  if (!lastCompressedOptions.value) return false;
+  return JSON.stringify(compressionOptions.value) !== JSON.stringify(lastCompressedOptions.value);
+});
+
+// 重置压缩参数
+const resetOptions = () => {
+  compressionOptions.value = { ...defaultOptions };
+};
+
+// 监听压缩参数变化
+const handleOptionsChange = () => {
+  // 不再清空压缩结果，只重置错误信息
+  error.value = null;
+};
+
+// 监听压缩参数变化
+watch(compressionOptions, handleOptionsChange, { deep: true });
 
 const handleDrop = async (e: DragEvent) => {
   e.preventDefault();
@@ -56,6 +100,7 @@ const processFile = async (file: File) => {
       base64,
       filename: file.name,
       size: file.size,
+      type: file.type,
     };
   };
   reader.readAsDataURL(file);
@@ -80,8 +125,11 @@ const handleCompress = async () => {
     error.value = null;
     compressedBase64.value = await compressImage(
       fileInfo.value.base64,
-      fileInfo.value.filename
+      fileInfo.value.filename,
+      compressionOptions.value
     );
+    // 保存最后使用的压缩参数
+    lastCompressedOptions.value = { ...compressionOptions.value };
   } catch (err) {
     console.error("压缩失败:", err);
     error.value = err instanceof Error ? err.message : "图片压缩失败，请重试";
@@ -117,6 +165,7 @@ onMounted(() => {
           :base64="fileInfo.base64"
           :filename="fileInfo.filename"
           :size="fileInfo.size"
+          :type="fileInfo.type"
         />
       </div>
     </div>
@@ -138,15 +187,12 @@ onMounted(() => {
           <div class="action-group">
             <button
               class="action-btn primary"
-              :class="{ 
-                completed: compressedBase64 && !isCompressing,
-              }"
               :disabled="!fileInfo || isCompressing"
               @click="handleCompress"
             >
-              <span class="btn-icon">{{ isCompressing ? "⏳" : compressedBase64 ? "✓" : "🔄" }}</span>
+              <span class="btn-icon">{{ isCompressing ? "⏳" : "🔄" }}</span>
               <span class="btn-text">{{
-                isCompressing ? "压缩中..." : compressedBase64 ? "压缩完成" : "压缩图片"
+                isCompressing ? "压缩中..." : "压缩图片"
               }}</span>
             </button>
             <CopyButton
@@ -156,13 +202,94 @@ onMounted(() => {
           </div>
         </div>
 
+        <div class="compression-options">
+          <h4>压缩参数</h4>
+          <div class="option-item">
+            <label>
+              最大文件大小 (MB):
+              <input
+                type="number"
+                v-model="compressionOptions.maxSizeMB"
+                min="0.1"
+                step="0.1"
+                class="number-input"
+              />
+            </label>
+          </div>
+          <div class="option-item">
+            <label>
+              最大宽度/高度 (像素):
+              <input
+                type="number"
+                v-model="compressionOptions.maxWidthOrHeight"
+                min="100"
+                step="100"
+                class="number-input"
+              />
+            </label>
+          </div>
+          <div class="option-item">
+            <label>
+              <input
+                type="checkbox"
+                v-model="compressionOptions.useWebWorker"
+                class="checkbox-input"
+              />
+              使用 Web Worker
+              <span class="option-tip">（后台压缩，不会卡住界面）</span>
+            </label>
+          </div>
+          <div class="option-item">
+            <label>
+              图片质量:
+              <input
+                type="range"
+                v-model="compressionOptions.quality"
+                min="0.1"
+                max="1"
+                step="0.1"
+                class="range-input"
+              />
+              <span class="range-value">{{ Math.round(compressionOptions.quality * 100) }}%</span>
+            </label>
+          </div>
+          <div class="option-item">
+            <label>
+              <input
+                type="checkbox"
+                v-model="compressionOptions.maintainAspectRatio"
+                class="checkbox-input"
+              />
+              保持原始宽高比
+              <span class="option-tip">（避免图片变形）</span>
+            </label>
+          </div>
+          <div class="option-item">
+            <label>
+              <input
+                type="checkbox"
+                v-model="compressionOptions.preserveExif"
+                class="checkbox-input"
+              />
+              保留 EXIF 信息
+              <span class="option-tip">（保留拍摄时间、相机型号等信息）</span>
+            </label>
+          </div>
+        </div>
+
         <div v-if="error" class="error">
           {{ error }}
         </div>
 
         <div v-if="compressedBase64" class="compression-content">
           <div class="preview-section">
-            <img :src="compressedBase64" class="preview-img" alt="压缩后预览" />
+            <div class="preview-wrapper">
+              <img :src="compressedBase64" class="preview-img" alt="压缩后预览" />
+              <div v-if="isCompressing" class="preview-loading">
+                <div class="loading-spinner"></div>
+                <span>压缩中...</span>
+              </div>
+            </div>
             <div class="info-card">
               <div class="info-item">
                 <span class="label">压缩后大小:</span>

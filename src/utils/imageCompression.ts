@@ -22,19 +22,24 @@ export const formatFileSize = (bytes: number): string => {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
 };
 
+interface CompressionOptions {
+  maxSizeMB: number;
+  maxWidthOrHeight: number;
+  useWebWorker: boolean;
+}
+
 // 压缩图片
 export const compressImage = async (
   base64: string,
-  filename: string = "image.png"
-): Promise<string> => {
-  const blob = await base64ToBlob(base64);
-  const file = new File([blob], filename, { type: blob.type });
-
-  const options = {
+  filename: string = "image.png",
+  options: CompressionOptions = {
     maxSizeMB: 1,
     maxWidthOrHeight: 1920,
     useWebWorker: true,
-  };
+  }
+): Promise<string> => {
+  const blob = await base64ToBlob(base64);
+  const file = new File([blob], filename, { type: blob.type });
 
   const compressedFile = await imageCompression(file, options);
   return new Promise((resolve, reject) => {
