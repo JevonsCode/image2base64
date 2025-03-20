@@ -91,6 +91,22 @@ const handleDrop = async (e: DragEvent) => {
   }
 };
 
+const handlePaste = async (e: ClipboardEvent) => {
+  e.preventDefault();
+  const items = e.clipboardData?.items;
+  if (!items) return;
+
+  for (const item of Array.from(items)) {
+    if (item.type.startsWith('image/')) {
+      const file = item.getAsFile();
+      if (file) {
+        await processFile(file);
+        break;
+      }
+    }
+  }
+};
+
 const handleFileSelect = async (e: Event) => {
   const files = (e.target as HTMLInputElement).files;
   if (files?.length) {
@@ -161,6 +177,9 @@ onMounted(() => {
     zone.addEventListener("dragover", preventDefault);
     zone.addEventListener("drop", handleDrop);
   }
+  
+  // 监听全局粘贴事件
+  document.addEventListener("paste", handlePaste);
 });
 </script>
 
@@ -168,7 +187,12 @@ onMounted(() => {
   <div class="main-container">
     <h1>图片转 Base64</h1>
 
-    <div ref="dropZone" class="drop-zone" :class="{ 'has-file': fileInfo }">
+    <div 
+      ref="dropZone" 
+      class="drop-zone" 
+      :class="{ 'has-file': fileInfo }"
+      tabindex="0"
+    >
       <input
         type="file"
         accept="image/*"
@@ -176,7 +200,7 @@ onMounted(() => {
         @change="handleFileSelect"
       />
       <div class="upload-hint">
-        <span v-if="!fileInfo">拖拽图片到此处或点击上传</span>
+        <span v-if="!fileInfo">拖拽图片到此处、点击上传或直接 Ctrl+V 粘贴图片</span>
         <Preview
           v-else
           :base64="fileInfo.base64"
@@ -185,6 +209,11 @@ onMounted(() => {
           :type="fileInfo.type"
         />
       </div>
+    </div>
+
+    <div class="global-paste-hint">
+      <span class="hint-icon">📋</span> 
+      <span class="hint-text">全局支持粘贴图片 (Ctrl+V)</span>
     </div>
 
     <div v-if="fileInfo" class="operation-section">
